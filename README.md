@@ -1,1 +1,1 @@
-# AnkiNote
+# simplechat.io
