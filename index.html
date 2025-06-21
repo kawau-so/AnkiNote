@@ -26,6 +26,8 @@
       touch-action: manipulation;
       transform-origin: top left;
       transition: transform 0.2s ease;
+      width: 95vw;
+      height: 80vh;
     }
     #main-image {
       display: block;
@@ -87,6 +89,21 @@
         image.onload = () => {
           canvasContainer.innerHTML = '';
           canvasContainer.appendChild(image);
+
+          // 画像の初期表示サイズを調整（画面内に収める）
+          const screenWidth = window.innerWidth * 0.95;
+          const screenHeight = window.innerHeight * 0.8;
+          const imgRatio = image.naturalWidth / image.naturalHeight;
+          const screenRatio = screenWidth / screenHeight;
+
+          if (imgRatio > screenRatio) {
+            image.style.width = screenWidth + 'px';
+            image.style.height = 'auto';
+          } else {
+            image.style.height = screenHeight + 'px';
+            image.style.width = 'auto';
+          }
+
           recognizeText(image);
         };
       };
@@ -109,10 +126,11 @@
     });
 
     canvasContainer.addEventListener('click', (e) => {
-      if (!image.src || mode !== 'edit') return;
       const rect = canvasContainer.getBoundingClientRect();
       const x = (e.clientX - rect.left + canvasContainer.scrollLeft) / zoomLevel;
       const y = (e.clientY - rect.top + canvasContainer.scrollTop) / zoomLevel;
+
+      if (!image.src || mode !== 'edit') return;
 
       if (!firstTap) {
         firstTap = { x, y };
