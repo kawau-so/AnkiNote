@@ -6,105 +6,79 @@
   <meta charset="UTF-8" />
   <link rel="manifest" href="./site.webmanifest">
   <title>AnkiNote</title>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
+  <!-- 修正: Tesseract.jsの正しいCDNに変更 -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.5/dist/tesseract.min.js"></script>
   <style>
-    body {
+    html, body {
+      margin: 0;
+      padding: 0;
       font-family: sans-serif;
       text-align: center;
       background: #f0f0f0;
-      margin: 0;
-      padding: 1em;
-      user-select: text;
+      overflow: hidden; /* スクロールを無効化 */
+      height: 100vh;
     }
     #canvas-container {
       position: relative;
       display: inline-block;
       border: 1px solid #ccc;
       margin-top: 10px;
-      user-select: text;
-      -webkit-user-select: text;
+      touch-action: none; /* スマホのスクロール防止 */
+      max-height: calc(100vh - 200px); /* ヘッダー・ボタンの高さ分を除外 */
+      overflow: hidden;
     }
     #main-image {
       max-width: 100%;
+      max-height: 100%;
       display: block;
-      -webkit-user-drag: none;
-      user-select: none;
-      pointer-events: none;
-    }
-    #text-layer {
-      position: absolute;
-      top: 0;
-      left: 0;
-      user-select: text;
-      -webkit-user-select: text;
-      color: transparent;
-      text-shadow: 0 0 1px rgba(0,0,0,0.5);
-      white-space: pre-wrap;
-      font-family: sans-serif;
-      pointer-events: auto;
+      touch-action: none; /* スマホのスクロール防止 */
     }
     .mask {
       position: absolute;
-      background-color: rgba(0,0,0,0.9);
+      background-color: transparent;
       pointer-events: auto;
       cursor: pointer;
       border: 2px solid red;
       box-sizing: border-box;
-      transition: background-color 0.3s ease;
     }
-    .mask.hidden {
-      background-color: transparent;
+    .visible {
+      background-color: black;
     }
     button, select {
       margin: 10px;
-      font-size: 1rem;
-      padding: 0.5em 1em;
-      user-select: none;
-      -webkit-user-select: none;
     }
   </style>
 </head>
 <body>
-  <h1>AnkiNote</h1>
-  <input type="file" id="imageUploader" accept="image/*" /><br />
-  <button id="editModeBtn" disabled>EditMode</button>
-  <button id="memoryModeBtn" disabled>AnkiMode</button>
-  <div id="canvas-container">
-    <img id="main-image" />
-    <div id="text-layer"></div>
-  </div>
+  <h1>暗記ツール</h1>
+  <input type="file" id="imageUploader" accept="image/*"><br>
+  <button id="editModeBtn">編集モード</button>
+  <button id="memoryModeBtn">暗記モード</button>
+  <select id="textSelector" style="display:none;"></select>
+  <div id="canvas-container"></div>
 
   <script>
     const imageUploader = document.getElementById('imageUploader');
     const canvasContainer = document.getElementById('canvas-container');
-    const mainImage = document.getElementById('main-image');
-    const textLayer = document.getElementById('text-layer');
     const editModeBtn = document.getElementById('editModeBtn');
     const memoryModeBtn = document.getElementById('memoryModeBtn');
-
-    let mode = 'memory';
+    const textSelector = document.getElementById('textSelector');
+    let mode = 'edit';
     let ocrResults = [];
 
-    enableModeButtons();
+    const image = new Image();
+    image.id = 'main-image';
 
-    function enableModeButtons() {
-      editModeBtn.disabled = false;
-      memoryModeBtn.disabled = false;
-      memoryModeBtn.disabled = true; // 初期は暗記モードなので暗記モードボタン無効化
-    }
-
-    imageUploader.addEventListener('change', async (e) => {
+    imageUploader.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (event) => {
-        mainImage.src = event.target.result;
-        mainImage.onload = async () => {
-          textLayer.style.width = mainImage.clientWidth + 'px';
-          textLayer.style.height = mainImage.clientHeight + 'px';
-          Array.from(canvasContainer.querySelectorAll('.mask')).forEach(el => el.remove());
-          await recognizeText(mainImage);
-          enableModeButtons();
+        image.src = event.target.result;
+        image.onload = () => {
+          canvasContainer.innerHTML = '';
+          canvasContainer.appendChild(image);
+          recognizeText(image);
         };
       };
       reader.readAsDataURL(file);
@@ -112,149 +86,79 @@
 
     editModeBtn.addEventListener('click', () => {
       mode = 'edit';
-      editModeBtn.disabled = true;
-      memoryModeBtn.disabled = false;
-      textLayer.style.pointerEvents = 'none'; // 編集モードは文字選択禁止、ドラッグ用に
-      alert('編集モードです。画像上でドラッグしてマスクを配置してください。');
+      document.body.style.overflow = 'hidden';
     });
 
     memoryModeBtn.addEventListener('click', () => {
       mode = 'memory';
-      editModeBtn.disabled = false;
-      memoryModeBtn.disabled = true;
-      textLayer.style.pointerEvents = 'auto'; // 暗記モードは文字選択可能に戻す
-      alert('暗記モードです。文字選択でマスク配置、マスククリックで表示/非表示切り替え可能です。');
+      document.body.style.overflow = 'auto';
     });
 
-    // --- ドラッグでマスク作成 ---
-    let isDragging = false;
-    let dragStartX = 0;
-    let dragStartY = 0;
-    let currentMask = null;
-
-    canvasContainer.addEventListener('mousedown', (e) => {
-      if (mode !== 'edit') return;
-      if (e.target !== mainImage && e.target !== canvasContainer) return;
-      isDragging = true;
-      const rect = canvasContainer.getBoundingClientRect();
-      dragStartX = e.clientX - rect.left;
-      dragStartY = e.clientY - rect.top;
-
-      currentMask = document.createElement('div');
-      currentMask.className = 'mask';
-      currentMask.style.left = `${dragStartX}px`;
-      currentMask.style.top = `${dragStartY}px`;
-      currentMask.style.width = '0px';
-      currentMask.style.height = '0px';
-      canvasContainer.appendChild(currentMask);
-
-      e.preventDefault();
-    });
-
-    canvasContainer.addEventListener('mousemove', (e) => {
-      if (!isDragging || mode !== 'edit' || !currentMask) return;
-      const rect = canvasContainer.getBoundingClientRect();
-      const currentX = e.clientX - rect.left;
-      const currentY = e.clientY - rect.top;
-
-      const left = Math.min(dragStartX, currentX);
-      const top = Math.min(dragStartY, currentY);
-      const width = Math.abs(currentX - dragStartX);
-      const height = Math.abs(currentY - dragStartY);
-
-      currentMask.style.left = `${left}px`;
-      currentMask.style.top = `${top}px`;
-      currentMask.style.width = `${width}px`;
-      currentMask.style.height = `${height}px`;
-    });
-
-    window.addEventListener('mouseup', (e) => {
-      if (!isDragging || mode !== 'edit') return;
-      isDragging = false;
-
-      // 最小サイズの制限（例えば幅・高さ5px未満はキャンセル）
-      const width = parseFloat(currentMask.style.width);
-      const height = parseFloat(currentMask.style.height);
-      if (width < 5 || height < 5) {
-        currentMask.remove();
-      }
-      currentMask = null;
-    });
-
-    // --- マスククリックで表示/非表示切替（暗記モード時） ---
     canvasContainer.addEventListener('click', (e) => {
-      if (mode !== 'memory') return;
-      if (!e.target.classList.contains('mask')) return;
-      e.target.classList.toggle('hidden');
+      if (!image.src || mode !== 'edit') return;
+      const rect = canvasContainer.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const mask = document.createElement('div');
+      mask.className = 'mask';
+      mask.style.left = `${x - 50}px`;
+      mask.style.top = `${y - 20}px`;
+      mask.style.width = '100px';
+      mask.style.height = '40px';
+      canvasContainer.appendChild(mask);
     });
 
-    async function recognizeText(imageElement) {
-      textLayer.innerHTML = '';
-      ocrResults = [];
-      try {
-        const worker = Tesseract.createWorker({
-          logger: m => console.log(m),
-        });
-        await worker.load();
-        await worker.loadLanguage('jpn');
-        await worker.initialize('jpn');
-        const { data: { words } } = await worker.recognize(imageElement.src);
-        ocrResults = words;
-        await worker.terminate();
-
-        const imgRect = imageElement.getBoundingClientRect();
-        const scaleX = imageElement.naturalWidth / imgRect.width;
-        const scaleY = imageElement.naturalHeight / imgRect.height;
-
-        words.forEach(word => {
-          const span = document.createElement('span');
-          span.textContent = word.text + ' ';
-          span.style.position = 'absolute';
-          const x = word.bbox.x0 / scaleX;
-          const y = word.bbox.y0 / scaleY;
-          const w = (word.bbox.x1 - word.bbox.x0) / scaleX;
-          const h = (word.bbox.y1 - word.bbox.y0) / scaleY;
-          span.style.left = `${x}px`;
-          span.style.top = `${y}px`;
-          span.style.width = `${w}px`;
-          span.style.height = `${h}px`;
-          span.style.lineHeight = `${h}px`;
-          span.style.fontSize = `${h}px`;
-          span.style.whiteSpace = 'nowrap';
-          span.style.color = 'transparent';
-          span.style.textShadow = '0 0 1px rgba(0,0,0,0.5)';
-          span.style.userSelect = 'text';
-          textLayer.appendChild(span);
-        });
-      } catch (e) {
-        console.error(e);
-        alert('文字認識に失敗しました。コンソールを確認してください。');
+    canvasContainer.addEventListener('click', (e) => {
+      if (mode === 'memory') {
+        const target = e.target;
+        if (target.classList.contains('mask')) {
+          target.classList.toggle('visible');
+        }
       }
+    });
+
+    function recognizeText(imageElement) {
+      textSelector.style.display = 'none';
+      Tesseract.recognize(
+        imageElement.src,
+        'jpn',
+        { logger: m => console.log(m) }
+      ).then(result => {
+        const words = result.data.words;
+        ocrResults = words;
+        textSelector.innerHTML = '<option disabled selected>文字を選んでください</option>';
+        words.forEach((word, index) => {
+          const option = document.createElement('option');
+          option.value = index;
+          option.textContent = word.text;
+          textSelector.appendChild(option);
+        });
+        textSelector.style.display = 'inline';
+      });
     }
 
-    // 文字選択でマスク作成（暗記モード時）
-    document.addEventListener('selectionchange', () => {
-      if (mode !== 'memory') return;
-      const sel = window.getSelection();
-      if (!sel.rangeCount) return;
+    textSelector.addEventListener('change', () => {
+      const selectedIndex = textSelector.value;
+      const word = ocrResults[selectedIndex];
+      if (!word) return;
 
-      const range = sel.getRangeAt(0);
-      if (!canvasContainer.contains(range.commonAncestorContainer)) return;
+      const { bbox } = word;
+      const x0 = bbox.x0 || word.bbox.x;
+      const y0 = bbox.y0 || word.bbox.y;
+      const x1 = bbox.x1 || (x0 + word.bbox.w);
+      const y1 = bbox.y1 || (y0 + word.bbox.h);
 
-      const rect = range.getBoundingClientRect();
-      const containerRect = canvasContainer.getBoundingClientRect();
-
-      if (rect.width < 5 || rect.height < 5) return;
+      const imgRect = image.getBoundingClientRect();
+      const scaleX = image.naturalWidth / imgRect.width;
+      const scaleY = image.naturalHeight / imgRect.height;
 
       const mask = document.createElement('div');
       mask.className = 'mask';
-      mask.style.left = `${rect.left - containerRect.left}px`;
-      mask.style.top = `${rect.top - containerRect.top}px`;
-      mask.style.width = `${rect.width}px`;
-      mask.style.height = `${rect.height}px`;
+      mask.style.left = `${x0 / scaleX}px`;
+      mask.style.top = `${y0 / scaleY}px`;
+      mask.style.width = `${(x1 - x0) / scaleX}px`;
+      mask.style.height = `${(y1 - y0) / scaleY}px`;
       canvasContainer.appendChild(mask);
-
-      sel.removeAllRanges();
     });
   </script>
 </body>
