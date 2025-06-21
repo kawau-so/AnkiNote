@@ -6,7 +6,6 @@
   <meta charset="UTF-8" />
   <link rel="manifest" href="./site.webmanifest">
   <title>暗記ツール</title>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.5/dist/tesseract.min.js"></script>
   <style>
     html, body {
       margin: 0;
@@ -25,7 +24,6 @@
       overflow: auto;
       touch-action: manipulation;
       transform-origin: top left;
-      transition: transform 0.2s ease;
       width: 95vw;
       height: 80vh;
     }
@@ -45,11 +43,8 @@
     .visible {
       background-color: black;
     }
-    button, select {
+    button {
       margin: 10px;
-    }
-    #zoom-controls {
-      margin-top: 10px;
     }
   </style>
 </head>
@@ -58,10 +53,6 @@
   <input type="file" id="imageUploader" accept="image/*"><br>
   <button id="editModeBtn">編集モード</button>
   <button id="memoryModeBtn">暗記モード</button>
-  <select id="textSelector" style="display:none;"></select>
-  <div id="zoom-controls">
-    ズーム: <input type="range" id="zoomSlider" min="0.5" max="3" step="0.1" value="1">
-  </div>
   <div id="canvas-container"></div>
 
   <script>
@@ -69,10 +60,7 @@
     const canvasContainer = document.getElementById('canvas-container');
     const editModeBtn = document.getElementById('editModeBtn');
     const memoryModeBtn = document.getElementById('memoryModeBtn');
-    const textSelector = document.getElementById('textSelector');
-    const zoomSlider = document.getElementById('zoomSlider');
     let mode = 'edit';
-    let ocrResults = [];
     let zoomLevel = 1;
 
     const image = new Image();
@@ -90,7 +78,6 @@
           canvasContainer.innerHTML = '';
           canvasContainer.appendChild(image);
 
-          // 画像の初期表示サイズを調整（画面内に収める）
           const screenWidth = window.innerWidth * 0.95;
           const screenHeight = window.innerHeight * 0.8;
           const imgRatio = image.naturalWidth / image.naturalHeight;
@@ -103,8 +90,6 @@
             image.style.height = screenHeight + 'px';
             image.style.width = 'auto';
           }
-
-          recognizeText(image);
         };
       };
       reader.readAsDataURL(file);
@@ -118,11 +103,6 @@
     memoryModeBtn.addEventListener('click', () => {
       mode = 'memory';
       firstTap = null;
-    });
-
-    zoomSlider.addEventListener('input', () => {
-      zoomLevel = parseFloat(zoomSlider.value);
-      canvasContainer.style.transform = `scale(${zoomLevel})`;
     });
 
     canvasContainer.addEventListener('click', (e) => {
@@ -160,50 +140,6 @@
           target.classList.toggle('visible');
         }
       }
-    });
-
-    function recognizeText(imageElement) {
-      textSelector.style.display = 'none';
-      Tesseract.recognize(
-        imageElement.src,
-        'jpn',
-        { logger: m => console.log(m) }
-      ).then(result => {
-        const words = result.data.words;
-        ocrResults = words;
-        textSelector.innerHTML = '<option disabled selected>文字を選んでください</option>';
-        words.forEach((word, index) => {
-          const option = document.createElement('option');
-          option.value = index;
-          option.textContent = word.text;
-          textSelector.appendChild(option);
-        });
-        textSelector.style.display = 'inline';
-      });
-    }
-
-    textSelector.addEventListener('change', () => {
-      const selectedIndex = textSelector.value;
-      const word = ocrResults[selectedIndex];
-      if (!word) return;
-
-      const { bbox } = word;
-      const x0 = bbox.x0 || word.bbox.x;
-      const y0 = bbox.y0 || word.bbox.y;
-      const x1 = bbox.x1 || (x0 + word.bbox.w);
-      const y1 = bbox.y1 || (y0 + word.bbox.h);
-
-      const imgRect = image.getBoundingClientRect();
-      const scaleX = image.naturalWidth / imgRect.width;
-      const scaleY = image.naturalHeight / imgRect.height;
-
-      const mask = document.createElement('div');
-      mask.className = 'mask';
-      mask.style.left = `${x0 / scaleX}px`;
-      mask.style.top = `${y0 / scaleY}px`;
-      mask.style.width = `${(x1 - x0) / scaleX}px`;
-      mask.style.height = `${(y1 - y0) / scaleY}px`;
-      canvasContainer.appendChild(mask);
     });
   </script>
 </body>
