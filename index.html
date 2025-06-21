@@ -4,8 +4,7 @@
   <meta name="robots" content="noindex">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta charset="UTF-8" />
-  <link rel="manifest" href="./site.webmanifest">
-  <title>AnkiNote</title>
+  <title>暗記ツール</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.5/dist/tesseract.min.js"></script>
   <style>
     html, body {
@@ -24,6 +23,8 @@
       margin-top: 10px;
       overflow: auto;
       touch-action: manipulation;
+      transform-origin: top left;
+      transition: transform 0.2s ease;
     }
     #main-image {
       display: block;
@@ -44,14 +45,20 @@
     button, select {
       margin: 10px;
     }
+    #zoom-controls {
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
-  <h1>AnkiNote</h1>
+  <h1>暗記ツール</h1>
   <input type="file" id="imageUploader" accept="image/*"><br>
-  <button id="editModeBtn">EditMode</button>
-  <button id="memoryModeBtn">AnkiMode</button>
+  <button id="editModeBtn">編集モード</button>
+  <button id="memoryModeBtn">暗記モード</button>
   <select id="textSelector" style="display:none;"></select>
+  <div id="zoom-controls">
+    ズーム: <input type="range" id="zoomSlider" min="0.5" max="3" step="0.1" value="1">
+  </div>
   <div id="canvas-container"></div>
 
   <script>
@@ -60,8 +67,10 @@
     const editModeBtn = document.getElementById('editModeBtn');
     const memoryModeBtn = document.getElementById('memoryModeBtn');
     const textSelector = document.getElementById('textSelector');
+    const zoomSlider = document.getElementById('zoomSlider');
     let mode = 'edit';
     let ocrResults = [];
+    let zoomLevel = 1;
 
     const image = new Image();
     image.id = 'main-image';
@@ -93,11 +102,16 @@
       firstTap = null;
     });
 
+    zoomSlider.addEventListener('input', () => {
+      zoomLevel = parseFloat(zoomSlider.value);
+      canvasContainer.style.transform = `scale(${zoomLevel})`;
+    });
+
     canvasContainer.addEventListener('click', (e) => {
       if (!image.src || mode !== 'edit') return;
       const rect = canvasContainer.getBoundingClientRect();
-      const x = e.clientX - rect.left + canvasContainer.scrollLeft;
-      const y = e.clientY - rect.top + canvasContainer.scrollTop;
+      const x = (e.clientX - rect.left + canvasContainer.scrollLeft) / zoomLevel;
+      const y = (e.clientY - rect.top + canvasContainer.scrollTop) / zoomLevel;
 
       if (!firstTap) {
         firstTap = { x, y };
