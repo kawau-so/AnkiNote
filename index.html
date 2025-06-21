@@ -14,23 +14,21 @@
       font-family: sans-serif;
       text-align: center;
       background: #f0f0f0;
-      overflow: hidden;
       height: 100vh;
+      overflow: auto;
     }
     #canvas-container {
       position: relative;
       display: inline-block;
       border: 1px solid #ccc;
       margin-top: 10px;
-      touch-action: none;
-      max-height: calc(100vh - 200px);
-      overflow: hidden;
+      overflow: auto;
+      touch-action: manipulation;
     }
     #main-image {
-      max-width: 100%;
-      max-height: 100%;
       display: block;
-      touch-action: none;
+      max-width: none;
+      height: auto;
     }
     .mask {
       position: absolute;
@@ -87,21 +85,19 @@
 
     editModeBtn.addEventListener('click', () => {
       mode = 'edit';
-      document.body.style.overflow = 'hidden';
       firstTap = null;
     });
 
     memoryModeBtn.addEventListener('click', () => {
       mode = 'memory';
-      document.body.style.overflow = 'auto';
       firstTap = null;
     });
 
     canvasContainer.addEventListener('click', (e) => {
       if (!image.src || mode !== 'edit') return;
       const rect = canvasContainer.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const x = e.clientX - rect.left + canvasContainer.scrollLeft;
+      const y = e.clientY - rect.top + canvasContainer.scrollTop;
 
       if (!firstTap) {
         firstTap = { x, y };
