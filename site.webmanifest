@@ -1,9 +1,9 @@
 {
-  "name": "すぐるんちゃっと",
-  "short_name": "ちゃっと",
+  "name": "AnkiNote",
+  "short_name": "AnkiNote",
   "display": "standalone",
   "background_color": "#ffffff",
-  "start_url": "./kawaiiusonokawauso.html",
+  "start_url": "./index.html",
   "icons": [
     {
       "src": "icon-192.png",
